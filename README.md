@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SyncPlay Beta 🎵
 
-## Getting Started
+SyncPlay Beta is a real-time, synchronized audio playback platform. It allows multiple users to join a virtual room and listen to the same audio track in perfect synchronization, with sub-50ms latency compensation.
 
-First, run the development server:
+## Features ✨
+- **Real-Time Synchronization**: Audio is kept perfectly in sync across all devices in a room using a custom NTP-style latency compensation algorithm.
+- **Dynamic Host Promotion**: If the host disconnects, the next available participant is automatically promoted to host.
+- **Live Debug Panel**: Monitor socket connection health, real-time RTT (Round Trip Time), and event logs via the `/debug` route.
+- **Embedded Player**: Supports direct audio URLs, YouTube embeds, and Spotify embeds.
+- **Server-Side URL Validation**: Prevents invalid media from breaking the room.
+
+## Technology Stack 🛠️
+- **Frontend**: Next.js 14+ (App Router), React, Tailwind CSS, Lucide Icons.
+- **Backend**: Custom Node.js server with `Socket.io` for real-time bidirectional event streaming.
+- **State Management**: In-memory Map (for room states) with optimistic UI updates.
+
+## Getting Started 🚀
+
+### 1. Local Development
+Since this project requires a persistent WebSocket connection, you need to run the custom `server.ts` instead of the default Next.js server.
 
 ```bash
+# Install dependencies
+npm install
+
+# Run the development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
+Access the app at `http://localhost:3000`.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Deployment
+Because this project relies on a stateful `Socket.io` backend, **standard Vercel deployment will not work for the backend** (Vercel uses Serverless functions which don't support long-lived WebSockets).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Recommended Deployment: VPS or Render/Railway**
+Deploy the entire project (Frontend + Backend) to a platform that supports long-running Node.js processes, such as a VPS, Render, or Railway.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+If you must use Vercel for the frontend, you will need to host the Socket server separately and configure the frontend to connect to it by setting the `NEXT_PUBLIC_SOCKET_URL` environment variable.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Disclaimer
+This is a Beta version. Features and optimizations are ongoing.
