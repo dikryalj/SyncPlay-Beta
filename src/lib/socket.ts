@@ -39,7 +39,8 @@ export function clearRoomContext(): void {
 
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io({
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "";
+    socket = io(socketUrl, {
       path: "/api/socketio",
       transports: ["websocket", "polling"],
       // Automatically attempt to reconnect

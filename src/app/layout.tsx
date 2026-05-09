@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
@@ -27,6 +27,9 @@ export const metadata: Metadata = {
     description: "Create a room and share music with anyone, anywhere. <50ms sync margin guaranteed.",
     type: "website",
   },
+};
+
+export const viewport: Viewport = {
   themeColor: "#0A0A0F",
 };
 
