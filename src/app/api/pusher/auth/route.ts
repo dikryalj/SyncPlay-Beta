@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getPusherServer } from "@/lib/pusher";
+import { getPusherServer } from "@/lib/pusher-server";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const body = await req.text();

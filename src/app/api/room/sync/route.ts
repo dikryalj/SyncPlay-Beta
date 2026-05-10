@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase";
-import { getPusherServer } from "@/lib/pusher";
+import { getPusherServer } from "@/lib/pusher-server";
 import type { SyncAction, Track } from "@/lib/types";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {

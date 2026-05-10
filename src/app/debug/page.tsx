@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Wifi, WifiOff, ArrowLeft, RefreshCw, Radio, Zap, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { getPusherClient } from "@/lib/pusher";
+import { getPusherClient } from "@/lib/pusher-client";
 
 interface PusherEvent { ts: number; name: string; payload: string; }
 

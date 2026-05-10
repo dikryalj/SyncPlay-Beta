@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase";
-import { getPusherServer } from "@/lib/pusher";
+import { getPusherServer } from "@/lib/pusher-server";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const { roomCode, userId } = await req.json();

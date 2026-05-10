@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase";
-import { getPusherServer } from "@/lib/pusher";
+import { getPusherServer } from "@/lib/pusher-server";
 import { parseTrackUrl } from "@/lib/urlParser";
 import type { RoomMember, RoomStateResponse, Track } from "@/lib/types";
 
