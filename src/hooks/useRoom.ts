@@ -28,6 +28,8 @@ export interface UseRoomReturn {
   queue:           Track[];
   isPlaying:       boolean;
   syncTime:        number | null;
+  /** Incremented on every play event — forces AudioPlayer to re-seek (seamless resume fix). */
+  syncVersion:     number;
   members:         RoomMember[];
   hostUserId:      string;
   connected:       boolean;
@@ -37,6 +39,7 @@ export interface UseRoomReturn {
   play:            (time: number) => void;
   pause:           (time: number) => void;
   seek:            (time: number) => void;
+  nextTrack:       () => void;
   addToQueue:      (url: string) => Promise<void>;
   removeFromQueue: (trackId: string) => void;
   changeTrack:     (track: Track) => void;
@@ -54,6 +57,7 @@ export function useRoom({
   const [queue,        setQueue]         = useState<Track[]>([]);
   const [isPlaying,    setIsPlaying]     = useState(false);
   const [syncTime,     setSyncTime]      = useState<number | null>(null);
+  const [syncVersion,  setSyncVersion]   = useState(0);
   const [members,      setMembers]       = useState<RoomMember[]>([]);
   const [hostUserId,   setHostUserId]    = useState<string>("");
   const [connected,    setConnected]     = useState(false);
@@ -86,6 +90,7 @@ export function useRoom({
     (time: number) => {
       setIsPlaying(true);
       setSyncTime(time);
+      setSyncVersion((v) => v + 1); // force AudioPlayer re-seek
       liveTimeRef.current = time;
       apiSync("play", { time });
     },
@@ -113,12 +118,21 @@ export function useRoom({
     (track: Track) => {
       setCurrentTrack(track);
       setSyncTime(0);
+      setSyncVersion(0);
       liveTimeRef.current = 0;
       setIsPlaying(false);
       apiSync("track-change", { track });
     },
     [apiSync]
   );
+
+  const nextTrack = useCallback(() => {
+    fetch("/api/room/next-track", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ roomCode: code, userId }),
+    }).catch(console.error);
+  }, [code, userId]);
 
   const addToQueue = useCallback(
     async (url: string) => {
@@ -228,6 +242,7 @@ export function useRoom({
     channel.bind("sync-play", ({ time, serverTimestamp }: SyncEvent) => {
       const t = compensate(time, serverTimestamp);
       setSyncTime(t);
+      setSyncVersion((v) => v + 1); // triggers AudioPlayer seek
       liveTimeRef.current = t;
       setIsPlaying(true);
     });
@@ -244,9 +259,10 @@ export function useRoom({
       liveTimeRef.current = t;
     });
 
-    channel.bind("sync-track", ({ track }: { track: Track }) => {
-      setCurrentTrack(track);
+    channel.bind("sync-track", ({ track }: { track: Track | null }) => {
+      setCurrentTrack(track ?? null);
       setSyncTime(0);
+      setSyncVersion(0);
       liveTimeRef.current = 0;
       setIsPlaying(false);
     });
@@ -292,6 +308,7 @@ export function useRoom({
     queue,
     isPlaying,
     syncTime,
+    syncVersion,
     members,
     hostUserId,
     connected,
@@ -301,6 +318,7 @@ export function useRoom({
     play,
     pause,
     seek,
+    nextTrack,
     addToQueue,
     removeFromQueue,
     changeTrack,

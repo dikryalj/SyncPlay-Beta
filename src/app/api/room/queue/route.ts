@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase";
 import { getPusherServer } from "@/lib/pusher-server";
-import { parseTrackUrl } from "@/lib/urlParser";
+import { parseAnyUrl } from "@/lib/urlParser";
 import type { Track } from "@/lib/types";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const { url, requestedBy = "Someone" } = body;
     if (!url) return NextResponse.json({ error: "URL required" }, { status: 400 });
 
-    const result = await parseTrackUrl(url);
+    const result = await parseAnyUrl(url, requestedBy);
     if (!result.ok) {
       return NextResponse.json(
         { error: result.error, message: result.message },
@@ -49,37 +49,53 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    const currentQueue: Track[] = room.queue ?? [];
+
+    // ── Playlist batch-add ──────────────────────────────────────────────────
+    if ("playlist" in result && result.playlist) {
+      if (result.tracks.length === 0) {
+        return NextResponse.json({ error: "PLAYLIST_FETCH_FAILED", message: "Playlist is empty or private." }, { status: 422 });
+      }
+      const newQueue = [...currentQueue, ...result.tracks];
+      const updates: Record<string, unknown> = { queue: newQueue };
+      let firstTrack: Track | null = null;
+      if (!room.current_track) {
+        updates.current_track = result.tracks[0];
+        firstTrack = result.tracks[0];
+      }
+      await db.from("rooms").update(updates).eq("code", roomCode);
+      await pusher.trigger(`presence-${roomCode}`, "queue-update", { queue: newQueue });
+      if (firstTrack) {
+        await pusher.trigger(`presence-${roomCode}`, "sync-track", {
+          track: firstTrack, serverTimestamp: Date.now(), actionType: "track-change",
+        });
+      }
+      return NextResponse.json({ ok: true, playlist: true, count: result.tracks.length });
+    }
+
+    // ── Single track add ───────────────────────────────────────────────────
+    // After the playlist guard above, result is guaranteed to be ParseResult.
+    const singleResult = result as import("@/lib/urlParser").ParseResult;
     const track: Track = {
-      ...result.track,
-      artist: result.track.artist
-        ? `${result.track.artist} · added by ${requestedBy}`
+      ...singleResult.track,
+      artist: singleResult.track.artist
+        ? `${singleResult.track.artist} · added by ${requestedBy}`
         : `Added by ${requestedBy}`,
     };
-
-    const currentQueue: Track[] = room.queue ?? [];
     const newQueue = [...currentQueue, track];
-
     const updates: Record<string, unknown> = { queue: newQueue };
     let autoSelectedTrack: Track | null = null;
-
-    // Auto-select as currentTrack if queue was empty
     if (!room.current_track) {
       updates.current_track = track;
       autoSelectedTrack = track;
     }
-
     await db.from("rooms").update(updates).eq("code", roomCode);
-
     await pusher.trigger(`presence-${roomCode}`, "queue-update", { queue: newQueue });
-
     if (autoSelectedTrack) {
       await pusher.trigger(`presence-${roomCode}`, "sync-track", {
-        track: autoSelectedTrack,
-        serverTimestamp: Date.now(),
-        actionType: "track-change",
+        track: autoSelectedTrack, serverTimestamp: Date.now(), actionType: "track-change",
       });
     }
-
     return NextResponse.json({ ok: true, track });
   }
 

@@ -32,11 +32,20 @@ export type ParseError =
   | "INVALID_URL"
   | "UNSUPPORTED_SOURCE"
   | "FETCH_FAILED"
-  | "EMPTY_URL";
+  | "EMPTY_URL"
+  | "PLAYLIST_NO_API_KEY"
+  | "PLAYLIST_FETCH_FAILED";
 
 export interface ParseResult {
   ok: true;
   track: ParsedTrack;
+}
+
+export interface PlaylistResult {
+  ok: true;
+  playlist: true;
+  tracks: ParsedTrack[];
+  listId: string;
 }
 
 export interface ParseFailure {
@@ -46,6 +55,7 @@ export interface ParseFailure {
 }
 
 export type ParseOutcome = ParseResult | ParseFailure;
+export type ParseAnyOutcome = ParseOutcome | PlaylistResult;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -82,6 +92,101 @@ function extractYouTubeId(url: string): string | null {
     if (m) return m[1];
   }
   return null;
+}
+
+function extractPlaylistId(url: string): string | null {
+  const u = safeUrl(url);
+  if (!u) return null;
+  const list = u.searchParams.get("list");
+  // Ignore auto-generated mix playlists (RD...)
+  if (!list || list.startsWith("RD")) return null;
+  return list;
+}
+
+/**
+ * Fetch all video IDs in a YouTube playlist via the Data API v3.
+ * Requires YOUTUBE_API_KEY environment variable.
+ * Handles pagination automatically (up to 200 videos).
+ */
+async function parseYouTubePlaylist(
+  listId: string,
+  requestedBy: string
+): Promise<PlaylistResult | ParseFailure> {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: "PLAYLIST_NO_API_KEY",
+      message:
+        "YouTube playlist ingestion requires a YOUTUBE_API_KEY environment variable. " +
+        "Get one at console.cloud.google.com and enable the YouTube Data API v3.",
+    };
+  }
+
+  const tracks: ParsedTrack[] = [];
+  let pageToken: string | undefined;
+  let page = 0;
+  const MAX_PAGES = 4; // cap at 200 videos (4 × 50)
+
+  try {
+    do {
+      const qs = new URLSearchParams({
+        part:       "snippet",
+        playlistId: listId,
+        maxResults: "50",
+        key:        apiKey,
+        ...(pageToken ? { pageToken } : {}),
+      });
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/playlistItems?${qs}`,
+        { signal: AbortSignal.timeout(10_000) }
+      );
+      if (!res.ok) throw new Error(`YouTube API HTTP ${res.status}`);
+
+      const data = await res.json() as {
+        nextPageToken?: string;
+        items: Array<{
+          snippet: {
+            title:      string;
+            channelTitle: string;
+            resourceId: { videoId: string };
+            thumbnails?: { medium?: { url: string } };
+          };
+        }>;
+      };
+
+      for (const item of data.items ?? []) {
+        const videoId = item.snippet.resourceId.videoId;
+        if (!videoId) continue;
+        const embedUrl  = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`;
+        const thumb     = item.snippet.thumbnails?.medium?.url;
+        tracks.push({
+          id:           videoId,
+          title:        item.snippet.title ?? `YouTube — ${videoId}`,
+          artist:       item.snippet.channelTitle
+            ? `${item.snippet.channelTitle} · added by ${requestedBy}`
+            : `Added by ${requestedBy}`,
+          duration:     0,
+          url:          embedUrl,
+          originalUrl:  `https://www.youtube.com/watch?v=${videoId}`,
+          source:       "youtube" as TrackSource,
+          thumbnailUrl: thumb,
+          coverUrl:     thumb,
+        });
+      }
+
+      pageToken = data.nextPageToken;
+      page++;
+    } while (pageToken && page < MAX_PAGES);
+  } catch (e) {
+    return {
+      ok: false,
+      error: "PLAYLIST_FETCH_FAILED",
+      message: `Failed to fetch playlist: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+
+  return { ok: true, playlist: true, tracks, listId };
 }
 
 async function parseYouTube(url: string, videoId: string): Promise<ParseOutcome> {
@@ -234,32 +339,48 @@ async function parseDirect(url: string): Promise<ParseOutcome> {
   }
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
+// ── Main exports ──────────────────────────────────────────────────────────────
 
 /**
- * Parse a raw URL string into a typed ParsedTrack.
- * Supports YouTube, Spotify, and direct audio links.
- * Safe to call in both browser and Node environments.
+ * Parse a single track URL (YouTube video, Spotify, or direct audio).
  */
 export async function parseTrackUrl(raw: string): Promise<ParseOutcome> {
   const trimmed = raw.trim();
   if (!trimmed) {
     return { ok: false, error: "EMPTY_URL", message: "Please enter a URL." };
   }
-
   const parsed = safeUrl(trimmed);
   if (!parsed) {
     return { ok: false, error: "INVALID_URL", message: "That doesn't look like a valid URL. Make sure it starts with https://" };
   }
 
-  // YouTube
   const ytId = extractYouTubeId(trimmed);
   if (ytId) return parseYouTube(trimmed, ytId);
 
-  // Spotify
   const spotifyMatch = trimmed.match(SPOTIFY_TRACK_PATTERN);
   if (spotifyMatch) return parseSpotify(trimmed, spotifyMatch[1]);
 
-  // Direct audio
   return parseDirect(trimmed);
+}
+
+/**
+ * Parse any URL — detects YouTube playlists first, falls back to single track.
+ * Returns PlaylistResult for playlists, ParseOutcome for single tracks.
+ */
+export async function parseAnyUrl(
+  raw: string,
+  requestedBy = "Someone"
+): Promise<ParseAnyOutcome> {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { ok: false, error: "EMPTY_URL", message: "Please enter a URL." };
+  }
+
+  // Check for YouTube playlist
+  const listId = extractPlaylistId(trimmed);
+  if (listId) {
+    return parseYouTubePlaylist(listId, requestedBy);
+  }
+
+  return parseTrackUrl(trimmed);
 }

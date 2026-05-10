@@ -41,6 +41,7 @@ function RoomPageInner() {
     queue,
     isPlaying,
     syncTime,
+    syncVersion,
     members,
     hostUserId,
     connected,
@@ -50,6 +51,7 @@ function RoomPageInner() {
     play,
     pause,
     seek,
+    nextTrack,
     addToQueue,
     removeFromQueue,
     changeTrack,
@@ -57,6 +59,12 @@ function RoomPageInner() {
   } = useRoom({ code, userId: userIdRef.current, userName, initialIsHost, initialUrl });
 
   const isHost = hostUserId === userIdRef.current;
+
+  // When host's track ends → advance queue via API (dequeues finished track)
+  const handleAutoNext = useCallback(() => {
+    if (!isHost) return;
+    nextTrack();
+  }, [isHost, nextTrack]);
 
   // ── Track navigation ───────────────────────────────────────────────────────
 
@@ -141,11 +149,12 @@ function RoomPageInner() {
                   isHost={isHost}
                   isPlaying={isPlaying}
                   syncTime={syncTime}
+                  syncVersion={syncVersion}
                   syncThresholdSeconds={0.5}
                   onPlay={()  => play(liveTimeRef.current)}
                   onPause={()  => pause(liveTimeRef.current)}
                   onSeek={seek}
-                  onNext={handleNext}
+                  onNext={handleAutoNext}
                   onPrev={handlePrev}
                   onCurrentTime={(t) => { liveTimeRef.current = t; }}
                 />
