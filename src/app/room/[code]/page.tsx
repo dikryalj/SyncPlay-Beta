@@ -60,7 +60,8 @@ function RoomPageInner() {
 
   const isHost = hostUserId === userIdRef.current;
 
-  // When host's track ends → advance queue via API (dequeues finished track)
+  // Both track-end (onEnded) and Skip Forward button call this.
+  // nextTrack() dequeues the finished track from Supabase via API.
   const handleAutoNext = useCallback(() => {
     if (!isHost) return;
     nextTrack();
@@ -68,12 +69,7 @@ function RoomPageInner() {
 
   // ── Track navigation ───────────────────────────────────────────────────────
 
-  const handleNext = useCallback(() => {
-    if (!queue.length || !currentTrack) return;
-    const idx  = queue.findIndex((t) => t.id === currentTrack.id);
-    const next = queue[(idx + 1) % queue.length];
-    if (next) changeTrack(next);
-  }, [queue, currentTrack, changeTrack]);
+  const handleNext = handleAutoNext;
 
   const handlePrev = useCallback(() => {
     if (!queue.length || !currentTrack) return;
@@ -154,7 +150,7 @@ function RoomPageInner() {
                   onPlay={()  => play(liveTimeRef.current)}
                   onPause={()  => pause(liveTimeRef.current)}
                   onSeek={seek}
-                  onNext={handleAutoNext}
+                  onNext={handleNext}
                   onPrev={handlePrev}
                   onCurrentTime={(t) => { liveTimeRef.current = t; }}
                 />

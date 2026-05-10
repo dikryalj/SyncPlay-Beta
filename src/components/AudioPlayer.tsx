@@ -113,26 +113,22 @@ export default function AudioPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncTime, syncVersion, isEmbed]);
 
-  // ── Progress ticker ───────────────────────────────────────────────────────
+  // ── Progress ticker (embed sources only) ────────────────────────────────
+  // Direct audio: currentTime is updated via the onTimeUpdate event on <audio>.
+  // Embeds (YouTube/Spotify iframes): we simulate progress with a 1s tick.
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    if (isActuallyPlaying) {
+    if (isActuallyPlaying && isEmbed) {
       intervalRef.current = setInterval(() => {
-        if (audioRef.current && !isEmbed) {
-          const t = audioRef.current.currentTime;
-          setCurrentTime(t);
-          onCurrentTime?.(t);
-        } else {
-          setCurrentTime((prev) => {
-            const next = prev + 1;
-            if (duration > 0 && next >= duration) return 0;
-            return next;
-          });
-        }
+        setCurrentTime((prev) => {
+          const next = prev + 1;
+          if (duration > 0 && next >= duration) return 0;
+          return next;
+        });
       }, 1_000);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isActuallyPlaying, duration, isEmbed, onCurrentTime]);
+  }, [isActuallyPlaying, isEmbed, duration]);
 
   // ── Play / pause control ──────────────────────────────────────────────────
   useEffect(() => {
@@ -205,12 +201,13 @@ export default function AudioPlayer({
           ref={audioRef}
           src={track.url}
           onEnded={() => {
-            // Auto queue progression: host advances, listeners follow via Pusher
             if (isHost) onNext?.();
           }}
           onTimeUpdate={(e) => {
-            setCurrentTime(e.currentTarget.currentTime);
-            onCurrentTime?.(e.currentTarget.currentTime);
+            // Direct audio: update currentTime from the real element every frame
+            const t = e.currentTarget.currentTime;
+            setCurrentTime(t);
+            onCurrentTime?.(t);
           }}
         />
       )}
